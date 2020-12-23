@@ -1,27 +1,27 @@
-FROM phusion/baseimage:0.9.22
-
-
-# Nginx-PHP Installation
-RUN  sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
-RUN  apt-get clean
-
-RUN apt-get update -y && apt-get install -y wget build-essential python-software-properties git-core vim nano
-RUN wget -O - https://download.newrelic.com/548C16BF.gpg | apt-key add - && \
-	echo "deb http://apt.newrelic.com/debian/ newrelic non-free" > /etc/apt/sources.list.d/newrelic.list
-RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 4F4EA0AAE5267A6C
-RUN add-apt-repository -y ppa:ondrej/php && add-apt-repository -y ppa:nginx/stable
-RUN apt-get update -y && apt-get upgrade -y && apt-get install -q -y php5.6 php5.6-dev php5.6-fpm php5.6-mysqlnd \
-	php5.6-pgsql php5.6-curl php5.6-gd php5.6-mbstring php5.6-mcrypt php5.6-intl php5.6-imap php5.6-tidy \
-	php5.6-xml php5.6-xmlrpc zip unzip php5.6-zip newrelic-php5 nginx-full ntp
-
-# Create new symlink to UTC timezone for localtime
-RUN unlink /etc/localtime
-RUN ln -s /usr/share/zoneinfo/UTC /etc/localtime
-
-# Update PECL channel listing
-RUN pecl channel-update pecl.php.net
-
-
-
-# Cleanup apt and lists
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+FROM centos:centos7.1.1503
+RUN curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+RUN yum clean all
+RUN yum makecache
+RUN yum -y swap fakesystemd systemd
+RUN rpm --rebuilddb && yum -y install gcc gcc-c++ automake libtool autoconf make tar openssl-devel libxml2-devel libcurl-devel libpng-devel
+WORKDIR /opt
+COPY libmcrypt-2.5.8.tar.gz .
+COPY php-5.6.22.tar.gz .
+RUN tar -xvf ./libmcrypt-2.5.8.tar.gz
+RUN tar -xvf ./php-5.6.22.tar.gz
+RUN cd /opt/libmcrypt-2.5.8 \
+    && ./configure \
+    && make clean \
+    && make \
+    && make install 
+RUN cd /opt/php-5.6.22 \
+    && './configure'  '--prefix=/usr/local/php' '--enable-fpm' '--with-fpm-user=fpm' '--with-fpm-group=fpm' '--with-mysql=mysqlnd' '--with-mysqli=mysqlnd' '--with-pdo-mysql=mysqlnd' '--without-pdo-sqlite' '--without-sqlite3' '--without-sqlite' '--with-mysql-sock=/tmp/mysql.sock' '--with-curl' '--enable-mbstring' '--with-mhash' '--with-mcrypt' '--with-openssl' '--with-gd' '--enable-sockets' '--with-gettext' '--with-zlib' '--enable-zip' '--enable-soap' '--with-xmlrpc' \
+    && make clean \
+    && make \
+    && make install 
+RUN cp /usr/local/php/etc/php-fpm.conf.default /usr/local/php/etc/php-fpm.conf
+RUN cp /opt/php-5.6.22/php.ini-production /usr/local/php/lib/php.ini
+RUN groupadd -r fpm && useradd -r -g fpm fpm
+WORKDIR /usr/local/php/sbin/
+EXPOSE 9000
+CMD ["./php-fpm", "-F"]
